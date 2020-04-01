@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "module": "ES6",
+    "module": "CommonJS",
     "target": "ESNext",
     "jsx": "react",
     "importHelpers": true,
@@ -8,6 +8,10 @@
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "resolveJsonModule": true, //to import json files withing js/ts files
-    "esModuleInterop": true //neeeded as well to import json files
-  }
+    "esModuleInterop": true, //neeeded as well to import json files
+    "outDir": "lib",
+    "inlineSourceMap": true
+  },
+  "compileOnSave": true,
+  "include": ["src"]
 }

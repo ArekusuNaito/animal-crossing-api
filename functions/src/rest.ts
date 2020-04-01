@@ -1,27 +1,74 @@
-import fs from 'fs';
+//tsconfig.json needs to be commonJS to use imports and not 'require'
+import * as functions from 'firebase-functions';
+import * as admin from 'firebase-admin';
+const fs = require('fs');
 import bodyParser, { json } from "body-parser";
 import cors from 'cors';
 import express from 'express'
+// const Critter = require('./Critter');
 import Critter from './Critter';
 const app = express();
 const port = 8888;
 
-const fishes:Critter[] = JSON.parse(fs.readFileSync('fishes.json','utf8'));
-const bugs:Critter[] = JSON.parse(fs.readFileSync('bugs.json', 'utf8'));
-const critters = [...fishes,...bugs];
+const secretManHero = require('../json/pokedex-party-firebase-adminsdk-thuun-700fa423bc.json');
 
-enum CrytterType { Critter = "critter", Fish = "fish", Bug = "bug" }
+const firebaseApp = admin.initializeApp
+({
+    credential: admin.credential.cert(secretManHero),
+    databaseURL: "https://pokedex-party.firebaseio.com"
+})
+const database = firebaseApp.database();
+
+//Used when working locally
+// const fishes:Critter[] = JSON.parse(fs.readFileSync('fishes.json','utf8'));
+// const bugs:Critter[] = JSON.parse(fs.readFileSync('bugs.json', 'utf8'));
+// const critters = [...fishes,...bugs];
+const bugs:any={};
+const fishes:any={};
+const critters:any={};  
+
+enum CritterType { Critter = "critter", Fish = "fish", Bug = "bug" }
+
+
+
+
+
+///
 
 
 
 app.use(cors());
 app.use(bodyParser.json());
+console.log('#################')
+console.log('API Initialized');
+
+async function getCritterTypeInDatabase(critterType: CritterType)
+{
+    if (critterType===CritterType.Critter)
+    {
+        const snapshot = await database.ref(`critters`).once('value');
+            const critterObject = snapshot.val();
+            const critters = [...critterObject.fishes,...critterObject.bugs]
+            return critters;
+    }
+    else
+    {
+        const pluralCritter = critterType == CritterType.Fish ? "fishes" : "bugs";
+        console.log(pluralCritter);
+        
+        const snapshot = await database.ref(`critters/${pluralCritter}`).once('value');
+        return snapshot.val();
+    }
+    
+}
 
 
-app.listen(port, () => {
-    console.log(`Server has started on port: ${port}`);
 
-});
+// Only when running on a local machine, when using firebase, its not needed
+// app.listen(port, () => {
+//     console.log(`Server has started on port: ${port}`);
+
+// });
 
 app.get('/ping', (request, response) => {
     console.log('Ping!');
@@ -33,6 +80,7 @@ app.get(`/critters`,async (request,response)=>
 {
     try
     {
+        const critters = await getCritterTypeInDatabase(CritterType.Critter);
         response.status(200).send(critters);
     }catch(error)
     {
@@ -41,7 +89,9 @@ app.get(`/critters`,async (request,response)=>
 });
 
 app.get(`/bugs`, async (request, response) => {
-    try {
+    try 
+    {
+        const bugs = await getCritterTypeInDatabase(CritterType.Bug);
         response.status(200).send(bugs);
     } catch (error) {
         response.status(500).send('Error on your bugs request')
@@ -49,7 +99,10 @@ app.get(`/bugs`, async (request, response) => {
 });
 
 app.get(`/fishes`, async (request, response) => {
-    try {
+    try
+    {
+        const fishes:Critter[] = await getCritterTypeInDatabase(CritterType.Fish);
+
         response.status(200).send(fishes);
     } catch (error) {
         response.status(500).send('Error on your fishes request')
@@ -61,24 +114,14 @@ app.get(critterIDRegex, async (request, response) =>
 {
     try
     {
-        const params = request.params;
-        const critterType = params['critterType'];
-        const id = Number.parseInt(params['id'])-1;
-        let critter:any;
         
-        if(critterType==='critter')
-        {
-            critter = critters[id]
-        }
-        else if (critterType === 'fish') 
-        {
-            critter = fishes[id];
-        }
-        else if(critterType==='bug')
-        {
-            critter = bugs[id];
-        }
-        response.status(200).send(critter);
+        const params = request.params;
+        const critterType = <CritterType>params[ 'critterType' ];
+        let critters:Critter[] = await getCritterTypeInDatabase(critterType);
+        const id = Number.parseInt(params['id'])-1; //Minus 1 because ids start on 1, yet array in 0
+
+        
+        response.status(200).send(critters[ id ]);
     }catch(error)
     {
         response.status(500).send('Server error');
@@ -95,25 +138,10 @@ app.get(critterNameRegex, async (request, response) =>
     {
         const params = request.params;
         console.log(params);
-        
-        const critterType = params['critterType'];
+        const critterType = <CritterType>params[ 'critterType' ];
+        const critters = await getCritterTypeInDatabase(critterType);
         const name = params['name'].toLowerCase();
-        let critter: any;
-        if (critterType === 'critter') 
-        {
-            // critter = critters[id]
-            critter = critters.find(currentCritter => currentCritter.name.toLowerCase()===name);
-        }
-        else if (critterType === 'fish') 
-        {
-            console.log(name);
-            
-            critter = fishes.find(currentCritter=>currentCritter.name.toLowerCase() === name);
-        }
-        else if (critterType === 'bug') 
-        {
-            critter = bugs.find(currentCritter => currentCritter.name.toLowerCase() === name);
-        }
+        let critter = critters.find(currentCritter => currentCritter.name.toLowerCase() === name);
         response.status(200).send(critter);
     } catch (error) 
     {
@@ -131,7 +159,7 @@ app.get(crittersByMonth, async (request, response) => {
     try
     {
         const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-        const critterType = request.params['critterType'];
+        const critterType = <CritterType>request.params['critterType'];
         const requestedHemisphere = request.params['hemisphere'];
         const requestedMonth = getMonthNumber(request.params['month'].toLowerCase());
         console.log('Filter by month',requestedMonth,requestedHemisphere);
@@ -146,28 +174,8 @@ app.get(crittersByMonth, async (request, response) => {
             return -1;
         }
         
-        
-        let critterSetToFilter: Critter[];
-        switch (critterType) 
-        {
-            case CrytterType.Critter:
-            {
-                critterSetToFilter = [...critters]
-                break;
-            }
-            case CrytterType.Fish:
-                {
-                    critterSetToFilter = [...fishes];
-                    break;
-                }
-            case CrytterType.Bug:
-                {
-                    critterSetToFilter = [...bugs]
-                    break;
-                }
-        }
-        //    
-        critterSetToFilter = critterSetToFilter.filter(currentCritter => 
+        let critters:Critter[] = await getCritterTypeInDatabase(critterType);
+        critters = critters.filter(currentCritter => 
         {
             try
             {
@@ -185,10 +193,8 @@ app.get(crittersByMonth, async (request, response) => {
         })
         console.log('Completed filtering...');
         const limit  = request.query.limit;
-        console.log(limit);
-        
-        if(limit)critterSetToFilter=critterSetToFilter.slice(0,limit);
-        response.status(200).send(critterSetToFilter);
+        if(limit)critters=critters.slice(0,limit);
+        response.status(200).send(critters);
     }catch(error)
     {
         response.status(500).send(`Error filtering critters `);
@@ -213,7 +219,9 @@ app.use((req, res, next) => {
 
 
 
+console.log('API Ready to Work!');
 
-
+//Expose the Express API to firebase
+exports.animalCrossingAPI = functions.https.onRequest(app);
 
 
