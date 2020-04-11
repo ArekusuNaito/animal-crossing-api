@@ -203,6 +203,18 @@ app.get(crittersByMonth, async (request, response) => {
 
 });
 
+app.use(`/fossils`,async (request,response)=>
+{
+    
+    try
+    {
+        const databaseResponse = await database.ref(`/fossils`).once('value');
+        response.status(200).send(databaseResponse.val());
+    }catch(error)
+    {
+        response.status(500).send(`Error filtering critters `);
+    }
+})
 
 
 
