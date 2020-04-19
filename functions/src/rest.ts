@@ -42,6 +42,12 @@ app.use(bodyParser.json());
 console.log('#################')
 console.log('API Initialized');
 
+// Only when running on a local machine, when using firebase, its not needed
+// app.listen(port, () => {
+//     console.log(`Server has started on port: ${port}`);
+
+// });
+
 async function getCritterTypeInDatabase(critterType: CritterType)
 {
     if (critterType===CritterType.Critter)
@@ -63,12 +69,6 @@ async function getCritterTypeInDatabase(critterType: CritterType)
 }
 
 
-
-// Only when running on a local machine, when using firebase, its not needed
-// app.listen(port, () => {
-//     console.log(`Server has started on port: ${port}`);
-
-// });
 
 app.get('/ping', (request, response) => {
     console.log('Ping!');
@@ -203,18 +203,49 @@ app.get(crittersByMonth, async (request, response) => {
 
 });
 
-app.use(`/fossils`,async (request,response)=>
+
+const missingFossilsRegex = `^/fossils/missing/:zukanID/$`
+
+app.use(missingFossilsRegex,async (request,response)=>
 {
     
     try
     {
-        const databaseResponse = await database.ref(`/fossils`).once('value');
+        const zukanID = request.params.zukanID
+        
+        // const fossilList:any[] = await (await database.ref(`newFossils/pieceList`).once('value')).val();
+        const fossilList:any[] = await (await database.ref(`newFossils/pieceList`).once('value')).val();
+        const databaseResponse = await database.ref(`pokedexes/${zukanID}`).once('value');
+        const zukan = databaseResponse.val();
+
+        const completionList = Object.keys(zukan.pokemon.completion).map(Number);
+        // console.log(completionList);
+
+        const filteredList = fossilList.filter(fossil=>!completionList.includes(fossil.id));
+        // console.log(filteredList,filteredList.length);
+        response.status(200).send(filteredList);
+    }catch(error)
+    {
+        response.status(500).send(`Error retrieving missing fossils`);
+    }
+})
+
+const fossilsRegex = `^/fossils/$`;
+app.use(fossilsRegex,async (request,response)=>
+{
+    
+    try
+    {
+        const databaseResponse = await database.ref(`/newFossils`).once('value');
+        // const databaseResponse = await database.ref(`/newFossils`).once('value');
         response.status(200).send(databaseResponse.val());
     }catch(error)
     {
         response.status(500).send(`Error filtering critters `);
     }
 })
+
+
 
 
 
